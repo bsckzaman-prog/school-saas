@@ -86,8 +86,64 @@ export default function SchoolWebsite({ schoolId, schoolName, onBack }: SchoolWe
       else { setLoginError('❌ ভুল ইমেইল বা পাসওয়ার্ড!'); }
     } catch (err) { setLoginError('❌ লগইন ব্যর্থ!'); }
   };
+     const handleUpdateSchoolCoreInfo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setInfoLoading(true);
+    try {
+      let finalLogoUrl = currentLogoUrl;
+      
+      // ফাইল অবজেক্টের প্রথম ইনডেক্স ও সঠিক এক্সটেনশন ফিক্স করা হলো
+      if (logoFile && logoFile.length > 0) {
+        const targetFile = logoFile[0]; // 👈 FileList থেকে আসল একক ফাইলটি নেওয়া হলো
+        const fileExt = targetFile.name.split('.').pop(); // 👈 ফাইলের আসল এক্সটেনশন রিড
+        const filePath = `${schoolId}/logo-${Date.now()}.${fileExt}`; // 👈 এক্সটেনশনসহ নিখুঁত পাথ তৈরি
+        
+        const { error: uploadError } = await supabase.storage
+          .from('student-images')
+          .upload(filePath, targetFile, { cacheControl: '3600', upsert: true });
+          
+        if (!uploadError) {
+          const { data } = supabase.storage.from('student-images').getPublicUrl(filePath);
+          finalLogoUrl = data.publicUrl;
+        } else {
+          console.error("Storage Error:", uploadError.message);
+        }
+      }
 
-  const handleUpdateSchoolCoreInfo = async (e: React.FormEvent) => { e.preventDefault(); setInfoLoading(true); try { let finalLogoUrl = currentLogoUrl; if (logoFile && logoFile.length > 0) { const filePath = schoolId + '/logo-' + Date.now(); const { error: uploadError } = await supabase.storage.from('student-images').upload(filePath, logoFile); if (!uploadError) { const { data: { publicUrl } } = supabase.storage.from('student-images').getPublicUrl(filePath); finalLogoUrl = publicUrl; } } const { error } = await supabase.from('schools').update({ name: editSchoolName.trim(), school_name_en: editSchoolNameEn.trim().toUpperCase(), phone_no: editPhone.trim(), eiin_no: editEiin.trim(), address: editAddress.trim(), slug: editSubdomain.trim(), email: editSchoolEmail.trim(), logo_url: finalLogoUrl }).eq('id', schoolId); if (!error) { setInfoFeedback('🎉 প্রোফাইল হালনাগাদ সফল!'); fetchSchoolDataCore(); } } catch (err: any) { setInfoFeedback(err.message); } finally { setInfoLoading(false); } };
+      // ডাটাবেজের লজিক কলাম সিঙ্ক করা হলো (logo এবং logo_url দুটোতেই সেভ করা হচ্ছে)
+           // ডাটাবেজের সঠিক কলাম (logo_url) সিঙ্ক করা হলো
+      const { error } = await supabase
+        .from('schools')
+        .update({
+          name: editSchoolName.trim(),
+          school_name_en: editSchoolNameEn.trim().toUpperCase(),
+          phone_no: editPhone.trim(),
+          eiin_no: editEiin.trim(),
+          address: editAddress.trim(),
+          slug: editSubdomain.trim(),
+          email: editSchoolEmail.trim(),
+          logo_url: finalLogoUrl   // 👈 শুধু এই সঠিক কলামটি থাকবে
+        })
+        .eq('id', schoolId);
+
+      if (!error) {
+        setCurrentLogoUrl(finalLogoUrl);
+        setLogoFile(null);
+        setInfoFeedback('🎉 প্রোফাইল হালনাগাদ সফল!');
+        
+        // আপনার লোকাল ডাটা রিফ্রেশ ফাংশনগুলো কল করা হচ্ছে
+        if (typeof fetchSchoolDataCore === 'function') fetchSchoolDataCore();
+        if (typeof fetchSchoolData === 'function') fetchSchoolData();
+      } else {
+        setInfoFeedback('❌ ডাটাবেজ এরর: ' + error.message);
+      }
+    } catch (err: any) {
+      setInfoFeedback('❌ এরর: ' + err.message);
+    } finally {
+      setInfoLoading(false);
+    }
+  };
+
   const handleNoticeSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!noticeTitle || !noticeContent) return; try { const { error } = await supabase.from('notices').insert([{ school_id: schoolId, title: noticeTitle, content: noticeContent, published_at: new Date().toISOString() }]); if (!error) { setNoticeMessage('🎉 নোটিশ সফলভাবে প্রকাশ হয়েছে।'); setNoticeTitle(''); setNoticeContent(''); fetchNotices(); } } catch (err) { console.error(err); } };
 
   const handleTeacherSubmit = async (e: React.FormEvent) => { e.preventDefault(); if (!tName || !tDesignation || !tPhone) return alert('আবশ্যিক ঘরগুলো পূরণ করুন!'); try { let tPhotoUrl = ''; if (tPhotoFile && tPhotoFile.length > 0) { const filePath = schoolId + '/teacher-' + Date.now(); const { error: uploadError } = await supabase.storage.from('student-images').upload(filePath, tPhotoFile); if (!uploadError) { const { data } = supabase.storage.from('student-images').getPublicUrl(filePath);
@@ -180,7 +236,7 @@ tPhotoUrl = data.publicUrl; } } const formattedDob = tDob && tDob.trim() !== '' 
                   <div>
                     <label className="block text-xs font-bold text-slate-500 mb-2">🕌 প্রতিষ্ঠানের লোগো</label>
                     <div className="flex items-center gap-4 mb-2">
-                      {logoFile && logoFile.length > 0 ? <span className="p-2 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">Selected</span> : currentLogoUrl ? <img src={currentLogoUrl} alt="Logo" className="w-10 h-10 object-contain rounded" /> : <span className="text-xl">🕌</span>}
+                      {logoFile && logoFile.length > 0 ? <span className="p-2 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">Selected</span> : currentLogoUrl ? <img src="/file.jpg" alt="Logo" className="w-10 h-10 object-contain rounded" /> : <span className="text-xl">🕌</span>}
                     </div>
                     <input type="file" accept="image/*" className="text-[10px] w-full bg-white p-1 border rounded cursor-pointer font-bold" onChange={(e: any) => setLogoFile(e.target.files)} />
                   </div>
